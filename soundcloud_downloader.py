@@ -7,6 +7,7 @@ import re
 import shutil
 import threading
 import yt_dlp
+from ffmpeg_manager import ensure_ffmpeg
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SONG_LIBRARY = os.path.join(BASE_DIR, "music", "song_library")
@@ -15,14 +16,6 @@ PLAYLISTS_DIR = os.path.join(BASE_DIR, "music", "playlists")
 
 def _sanitize(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", name).strip(" .")
-
-
-def _ffmpeg_ready() -> bool:
-    """True when ffmpeg/ffprobe are present in the project folder (needed for MP3)."""
-    return (
-        os.path.exists(os.path.join(BASE_DIR, "ffmpeg.exe"))
-        and os.path.exists(os.path.join(BASE_DIR, "ffprobe.exe"))
-    )
 
 
 def _base_opts(quiet=True):
@@ -95,9 +88,9 @@ def download(url: str, on_status=None):
     if not url.startswith("http"):
         url = "https://" + url
 
-    if not _ffmpeg_ready():
-        emit("ffmpeg.exe and ffprobe.exe are missing from the project folder. "
-             "Download them from ffmpeg.org and place them next to main.py (see README).")
+    ok, msg = ensure_ffmpeg(on_status=on_status)
+    if not ok:
+        emit(f"Download cancelled — {msg}")
         return
 
     emit("Resolving URL…")

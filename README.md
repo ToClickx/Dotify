@@ -35,10 +35,11 @@ pull audio from YouTube or SoundCloud right from the app.
 pip install -r requirements.txt
 ```
 
-- **ffmpeg (and ffprobe)** must be placed in the project folder for YouTube
-  downloads to convert to MP3. On Windows, download the static build from
-  [ffmpeg.org](https://ffmpeg.org/download.html), extract `ffmpeg.exe` and
-  `ffprobe.exe` next to `main.py`. (Git ignoring these — they're ~100 MB each.)
+- **ffmpeg (and ffprobe)** are required for YouTube / SoundCloud downloads to
+  convert to MP3. **Dotify auto-installs them on first download** — it fetches a
+  static Windows build (~100 MB) into the project folder automatically, no admin
+  rights needed. To skip that and provide your own instead, drop `ffmpeg.exe`
+  and `ffprobe.exe` next to `main.py` (git-ignored either way).
 
 ## Usage
 
@@ -56,6 +57,7 @@ Dotify/
 ├── main.py                     # App entry point + main window
 ├── music_manager.py            # Library + playlist management
 ├── music_player.py             # pygame playback wrapper (play/pause/seek)
+├── ffmpeg_manager.py           # Auto-downloads ffmpeg/ffprobe when missing
 ├── youtube_downloader.py       # YouTube search + MP3 download (yt-dlp)
 ├── soundcloud_downloader.py    # SoundCloud track/playlist download (yt-dlp)
 ├── music/                      # Local song library + playlists (gitignored)

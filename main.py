@@ -263,6 +263,15 @@ class DownloadThread(QThread):
             self.done_signal.emit(False)
 
 
+class _FfmpegWorker(QThread):
+    done = pyqtSignal(str)
+
+    def run(self):
+        from ffmpeg_manager import ensure_ffmpeg
+        _ok, msg = ensure_ffmpeg()
+        self.done.emit(msg)
+
+
 # ─── Now Playing Bar ─────────────────────────────────────────────────────────
 
 class NowPlayingBar(QWidget):
@@ -903,6 +912,17 @@ class MainWindow(QMainWindow):
         self._queue_index = -1
 
         self._build_ui()
+        self._warm_ffmpeg()
+
+    def _warm_ffmpeg(self):
+        """Auto-download ffmpeg in the background so it's ready before a download."""
+        import ffmpeg_manager
+        if ffmpeg_manager.ffmpeg_ready():
+            return
+        self._ffmpeg_worker = _FfmpegWorker()
+        self._ffmpeg_worker.done.connect(
+            lambda msg: self.statusBar().showMessage(f"ffmpeg: {msg}", 8000))
+        self._ffmpeg_worker.start()
 
     def _build_ui(self):
         central = QWidget()

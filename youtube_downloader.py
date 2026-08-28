@@ -6,6 +6,7 @@ import os
 import threading
 import requests
 import yt_dlp
+from ffmpeg_manager import ensure_ffmpeg
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SONG_LIBRARY = os.path.join(BASE_DIR, "music", "song_library")
@@ -45,10 +46,9 @@ def download(url: str, title: str, on_status=None):
     folder = os.path.join(SONG_LIBRARY, title)
     os.makedirs(folder, exist_ok=True)
 
-    if not (os.path.exists(os.path.join(BASE_DIR, "ffmpeg.exe"))
-            and os.path.exists(os.path.join(BASE_DIR, "ffprobe.exe"))):
-        emit("ffmpeg.exe and ffprobe.exe are missing from the project folder. "
-             "Download them from ffmpeg.org and place them next to main.py (see README).")
+    ok, msg = ensure_ffmpeg(on_status=on_status)
+    if not ok:
+        emit(f"Download cancelled — {msg}")
         return
 
     ydl_opts = {
