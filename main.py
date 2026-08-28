@@ -705,13 +705,43 @@ class LibraryPage(QWidget):
         self._scroll.setWidget(self._content)
         layout.addWidget(self._scroll, 1)
 
+        btns = QHBoxLayout()
+        btns.setSpacing(10)
+        add_btn = QPushButton("＋  Add Audio Files")
+        add_btn.setObjectName("green-btn")
+        add_btn.clicked.connect(self._add_local_files)
+        btns.addWidget(add_btn)
         reload_btn = QPushButton("↺  Reload Library")
         reload_btn.setObjectName("ghost-btn")
-        reload_btn.setFixedWidth(160)
+        reload_btn.setFixedWidth(150)
         reload_btn.clicked.connect(self.load_songs)
-        layout.addWidget(reload_btn)
+        btns.addWidget(reload_btn)
+        btns.addStretch()
+        layout.addLayout(btns)
 
         self.load_songs()
+
+    def _add_local_files(self):
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Add audio files", "",
+            "Audio (*.mp3 *.wav *.ogg *.flac *.aac *.m4a)")
+        if not files:
+            return
+        added, skipped = self._manager.import_audio_files(files)
+        self.load_songs()
+        lines = []
+        if added:
+            lines.append(f"Added {len(added)} song(s):")
+            for name in added[:8]:
+                lines.append(f"  • {name}")
+            if len(added) > 8:
+                lines.append(f"  …and {len(added) - 8} more")
+        if skipped:
+            lines.append("")
+            lines.append(f"Skipped ({len(skipped)}):")
+            lines.extend(f"  • {s}" for s in skipped[:6])
+        QMessageBox.information(self, "Add Audio",
+                                "\n".join(lines) if lines else "Nothing imported.")
 
     def load_songs(self):
         songs = self._manager.get_songs()
