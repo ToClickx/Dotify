@@ -2,7 +2,7 @@
 
 A dark, Spotify-style desktop music player with a built-in downloader, built
 with Python, PyQt6, and pygame. Browse your local library, build playlists, and
-pull audio from YouTube or SoundCloud right from the app.
+pull audio from SoundCloud right from the app.
 
 > **Built with AI assistance.** This project was developed with the help of an
 > AI coding assistant. The code is deterministic and has been reviewed by a
@@ -18,11 +18,10 @@ pull audio from YouTube or SoundCloud right from the app.
   plain `.txt` files under `music/playlists/`
 - **Now Playing bar** — play / pause, previous / next, seek slider, and volume
   slider with elapsed & total time
-- **Download from YouTube** — search for a video and download its audio as MP3
-  (192 kbps via `yt-dlp` + ffmpeg), including thumbnail
 - **Download from SoundCloud** — paste a track or playlist URL to pull audio plus
   artwork (via `yt-dlp`)
-- **Dark UI** — custom Qt stylesheet with green accents, edge-to-edge layout
+- **Dark UI** — custom Qt stylesheet (Fusion) with a dark slider groove, green
+  accents, and edge-to-edge layout
 - **Background downloads** — downloading and duration lookup run in QThreads so
   the UI stays responsive
 
@@ -35,9 +34,9 @@ pull audio from YouTube or SoundCloud right from the app.
 pip install -r requirements.txt
 ```
 
-- **ffmpeg (and ffprobe)** are required for YouTube / SoundCloud downloads to
-  convert to MP3. **Dotify auto-installs them on first download** — it fetches a
-  static Windows build (~100 MB) into the project folder automatically, no admin
+- **ffmpeg (and ffprobe)** are required for SoundCloud downloads to convert to
+  MP3. **Dotify auto-installs them on first download** — it fetches a static
+  Windows build (~100 MB) into the project folder automatically, no admin
   rights needed. To skip that and provide your own instead, drop `ffmpeg.exe`
   and `ffprobe.exe` next to `main.py` (git-ignored either way).
 
@@ -47,8 +46,8 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Drop audio folders into `music/song_library/`, or use the built-in downloaders
-(YouTube / SoundCloud tabs) to fill the library from search.
+Drop audio folders into `music/song_library/`, or paste a SoundCloud track /
+playlist URL into the **Download Music** page to fill the library.
 
 ## Project Layout
 
@@ -58,7 +57,6 @@ Dotify/
 ├── music_manager.py            # Library + playlist management
 ├── music_player.py             # pygame playback wrapper (play/pause/seek)
 ├── ffmpeg_manager.py           # Auto-downloads ffmpeg/ffprobe when missing
-├── youtube_downloader.py       # YouTube search + MP3 download (yt-dlp)
 ├── soundcloud_downloader.py    # SoundCloud track/playlist download (yt-dlp)
 ├── music/                      # Local song library + playlists (gitignored)
 ├── noimage.png                 # Fallback cover art
@@ -69,9 +67,8 @@ Dotify/
 
 - Only download content you have the rights to keep. This tool is intended for
   personal, lawful use (e.g. your own uploads or Creative-Commons material).
-- The bundled downloaders are unaffiliated with YouTube or SoundCloud — use at
-  your own responsibility and in compliance with the platforms' terms and local
-  law.
+- The downloader is unaffiliated with SoundCloud — use it at your own
+  responsibility and in compliance with the platform's terms and local law.
 
 ## License
 

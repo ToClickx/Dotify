@@ -11,7 +11,6 @@ from PyQt6.QtGui import *
 
 from music_manager import MusicManager
 from music_player import MusicPlayer
-import youtube_downloader as yt_dl
 import soundcloud_downloader as sc_dl
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,13 +119,16 @@ QPushButton#ctrl-main {
 QPushButton#ctrl-main:hover { background: #dddddd; }
 
 /* ── sliders ── */
-QSlider#prog::groove:horizontal { background:#333; height:4px; border-radius:2px; }
+QSlider#prog::groove:horizontal {
+    background:#333; height:4px; border-radius:2px;
+    margin: 2px 0;
+}
 QSlider#prog::sub-page:horizontal { background:#1db954; height:4px; border-radius:2px; }
 QSlider#prog::handle:horizontal {
-    background: transparent; width:12px; height:12px;
-    border-radius:6px; margin:-4px 0;
+    background:#ffffff; width:10px; height:10px;
+    border-radius:5px; margin:-5px 0;
 }
-QSlider#prog:hover::handle:horizontal { background: #ffffff; }
+QSlider#prog:hover::handle:horizontal { background:#ffffff; }
 
 QSlider#vol::groove:horizontal { background:#333; height:3px; border-radius:2px; }
 QSlider#vol::sub-page:horizontal { background:#a0a0a0; height:3px; border-radius:2px; }
@@ -221,17 +223,6 @@ QScrollArea, QScrollArea > QWidget > QWidget { background:transparent; border:no
 
 
 # ─── Worker threads ───────────────────────────────────────────────────────────
-
-class _SearchThread(QThread):
-    results = pyqtSignal(list)
-
-    def __init__(self, query: str):
-        super().__init__()
-        self._query = query
-
-    def run(self):
-        self.results.emit(yt_dl.search(self._query))
-
 
 class _DurThread(QThread):
     result = pyqtSignal(float)
@@ -759,77 +750,6 @@ class PlaylistSongsPage(QWidget):
 
 # ─── Downloader Page ──────────────────────────────────────────────────────────
 
-class YouTubeTab(QWidget):
-    def __init__(self):
-        super().__init__()
-        self._results: list[dict] = []
-        self._thread: DownloadThread | None = None
-        self._setup_ui()
-
-    def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 12, 0, 0)
-        layout.setSpacing(10)
-
-        row = QHBoxLayout()
-        self._entry = QLineEdit()
-        self._entry.setPlaceholderText("Search YouTube…")
-        self._entry.returnPressed.connect(self._search)
-        row.addWidget(self._entry, 1)
-        search_btn = QPushButton("Search")
-        search_btn.setObjectName("ghost-btn")
-        search_btn.setFixedWidth(88)
-        search_btn.clicked.connect(self._search)
-        row.addWidget(search_btn)
-        layout.addLayout(row)
-
-        self._list = QListWidget()
-        self._list.setMinimumHeight(180)
-        layout.addWidget(self._list, 1)
-
-        self._status = QLabel("Enter a search query above.")
-        self._status.setObjectName("status")
-        layout.addWidget(self._status)
-
-        dl_btn = QPushButton("⬇  Download Selected")
-        dl_btn.setObjectName("green-btn")
-        dl_btn.setFixedWidth(200)
-        dl_btn.clicked.connect(self._download)
-        layout.addWidget(dl_btn)
-
-    def _search(self):
-        query = self._entry.text().strip()
-        if not query:
-            return
-        self._status.setText("Searching…")
-        self._list.clear()
-        self._results = []
-        self._search_thread = _SearchThread(query)
-        self._search_thread.results.connect(self._populate_results)
-        self._search_thread.start()
-
-    def _populate_results(self, results: list):
-        self._results = results
-        self._list.clear()
-        for r in results:
-            self._list.addItem(r["title"])
-        self._status.setText(f"{len(results)} results found.")
-
-    def _download(self):
-        idx = self._list.currentRow()
-        if idx < 0 or idx >= len(self._results):
-            self._status.setText("Select a result first.")
-            return
-        r = self._results[idx]
-        self._status.setText(f"Starting download: {r['title']}")
-        self._thread = DownloadThread(yt_dl.download, r["url"], r["title"])
-        self._thread.status_signal.connect(self._status.setText)
-        self._thread.done_signal.connect(lambda ok: self._status.setText(
-            "✔ Download complete!" if ok else "✘ Download failed."
-        ))
-        self._thread.start()
-
-
 class SoundCloudTab(QWidget):
     def __init__(self):
         super().__init__()
@@ -885,10 +805,7 @@ class DownloaderPage(QWidget):
         title.setObjectName("page-title")
         layout.addWidget(title)
 
-        tabs = QTabWidget()
-        tabs.addTab(YouTubeTab(), "  YouTube  ")
-        tabs.addTab(SoundCloudTab(), "  SoundCloud  ")
-        layout.addWidget(tabs, 1)
+        layout.addWidget(SoundCloudTab(), 1)
 
 
 # ─── Main Window ──────────────────────────────────────────────────────────────
@@ -1031,6 +948,9 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    # Fusion so QSS subcontrols (::groove/::sub-page/::handle) render correctly
+    # instead of the native Windows style painting a white slider.
+    app.setStyle("Fusion")
     app.setStyleSheet(QSS)
 
     # Set Segoe UI font globally if available
