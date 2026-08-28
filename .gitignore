@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local media / runtime data (downloads go here)
+music/*
+!music/.gitkeep
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.m4a
+
+# Bundled binaries — add your own ffmpeg/ffprobe locally
+ffmpeg.exe
+ffprobe.exe
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

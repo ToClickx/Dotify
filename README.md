@@ -1,0 +1,76 @@
+# Dotify
+
+A dark, Spotify-style desktop music player with a built-in downloader, built
+with Python, PyQt6, and pygame. Browse your local library, build playlists, and
+pull audio from YouTube or SoundCloud right from the app.
+
+> **Built with AI assistance.** This project was developed with the help of an
+> AI coding assistant. The code is deterministic and has been reviewed by a
+> human.
+
+## Features
+
+- **Local library** — point it at a folder of MP3/WAV/OGG/FLAC/AAC/M4A files
+  (one sub-folder per track with optional artwork) and it builds your library
+  automatically
+- **Search** — filter the library by title, artist, or playlist
+- **Playlists** — create playlists and add songs from the library; playlists are
+  plain `.txt` files under `music/playlists/`
+- **Now Playing bar** — play / pause, previous / next, seek slider, and volume
+  slider with elapsed & total time
+- **Download from YouTube** — search for a video and download its audio as MP3
+  (192 kbps via `yt-dlp` + ffmpeg), including thumbnail
+- **Download from SoundCloud** — paste a track or playlist URL to pull audio plus
+  artwork (via `sclib`)
+- **Dark UI** — custom Qt stylesheet with green accents, edge-to-edge layout
+- **Background downloads** — downloading and duration lookup run in QThreads so
+  the UI stays responsive
+
+## Requirements
+
+- Python 3.10+
+- Dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+- **ffmpeg (and ffprobe)** must be placed in the project folder for YouTube
+  downloads to convert to MP3. On Windows, download the static build from
+  [ffmpeg.org](https://ffmpeg.org/download.html), extract `ffmpeg.exe` and
+  `ffprobe.exe` next to `main.py`. (Git ignoring these — they're ~100 MB each.)
+
+## Usage
+
+```bash
+python main.py
+```
+
+Drop audio folders into `music/song_library/`, or use the built-in downloaders
+(YouTube / SoundCloud tabs) to fill the library from search.
+
+## Project Layout
+
+```
+Dotify/
+├── main.py                     # App entry point + main window
+├── music_manager.py            # Library + playlist management
+├── music_player.py             # pygame playback wrapper (play/pause/seek)
+├── youtube_downloader.py       # YouTube search + MP3 download (yt-dlp)
+├── soundcloud_downloader.py    # SoundCloud track/playlist download (sclib)
+├── music/                      # Local song library + playlists (gitignored)
+├── noimage.png                 # Fallback cover art
+└── icon.ico                    # App icon
+```
+
+## Notes & disclaimer
+
+- Only download content you have the rights to keep. This tool is intended for
+  personal, lawful use (e.g. your own uploads or Creative-Commons material).
+- The bundled downloaders are unaffiliated with YouTube or SoundCloud — use at
+  your own responsibility and in compliance with the platforms' terms and local
+  law.
+
+## License
+
+MIT
