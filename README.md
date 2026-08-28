@@ -1,3 +1,5 @@
+<img width="960" height="691" alt="image" src="https://github.com/user-attachments/assets/76d0ef4b-1bf0-4705-905c-16ce7cb24f49" />
+
 # Dotify
 
 A dark, Spotify-style desktop music player with a built-in downloader, built
