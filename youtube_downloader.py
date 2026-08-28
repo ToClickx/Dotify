@@ -6,7 +6,6 @@ import os
 import threading
 import requests
 import yt_dlp
-from youtubesearchpython import VideosSearch
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SONG_LIBRARY = os.path.join(BASE_DIR, "music", "song_library")
@@ -16,10 +15,17 @@ def search(query: str, limit: int = 10) -> list:
     """Return list of {title, url, thumbnail_url} dicts."""
     results = []
     try:
-        vs = VideosSearch(query, limit=limit)
-        for v in vs.result()["result"]:
-            thumb = v["thumbnails"][0]["url"] if v.get("thumbnails") else ""
-            results.append({"title": v["title"], "url": v["link"], "thumbnail_url": thumb})
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+        for entry in info.get("entries", []):
+            vid = entry.get("id")
+            if not vid:
+                continue
+            results.append({
+                "title": entry.get("title", "Untitled"),
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "thumbnail_url": entry.get("thumbnail") or "",
+            })
     except Exception as e:
         print(f"YouTube search error: {e}")
     return results
@@ -39,6 +45,12 @@ def download(url: str, title: str, on_status=None):
     folder = os.path.join(SONG_LIBRARY, title)
     os.makedirs(folder, exist_ok=True)
 
+    if not (os.path.exists(os.path.join(BASE_DIR, "ffmpeg.exe"))
+            and os.path.exists(os.path.join(BASE_DIR, "ffprobe.exe"))):
+        emit("ffmpeg.exe and ffprobe.exe are missing from the project folder. "
+             "Download them from ffmpeg.org and place them next to main.py (see README).")
+        return
+
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": os.path.join(folder, "%(title)s.%(ext)s"),
@@ -50,6 +62,7 @@ def download(url: str, title: str, on_status=None):
         "ffmpeg_location": BASE_DIR,
         "quiet": True,
         "no_warnings": True,
+        "keepvideo": False,
         "progress_hooks": [lambda d: emit(f"Downloading… {d.get('_percent_str', '')}".strip())],
     }
     try:

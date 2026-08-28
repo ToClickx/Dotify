@@ -21,7 +21,7 @@ pull audio from YouTube or SoundCloud right from the app.
 - **Download from YouTube** — search for a video and download its audio as MP3
   (192 kbps via `yt-dlp` + ffmpeg), including thumbnail
 - **Download from SoundCloud** — paste a track or playlist URL to pull audio plus
-  artwork (via `sclib`)
+  artwork (via `yt-dlp`)
 - **Dark UI** — custom Qt stylesheet with green accents, edge-to-edge layout
 - **Background downloads** — downloading and duration lookup run in QThreads so
   the UI stays responsive
@@ -57,7 +57,7 @@ Dotify/
 ├── music_manager.py            # Library + playlist management
 ├── music_player.py             # pygame playback wrapper (play/pause/seek)
 ├── youtube_downloader.py       # YouTube search + MP3 download (yt-dlp)
-├── soundcloud_downloader.py    # SoundCloud track/playlist download (sclib)
+├── soundcloud_downloader.py    # SoundCloud track/playlist download (yt-dlp)
 ├── music/                      # Local song library + playlists (gitignored)
 ├── noimage.png                 # Fallback cover art
 └── icon.ico                    # App icon

@@ -3,5 +3,3 @@ pygame>=2.5.0
 Pillow>=9.0.0
 requests>=2.28.0
 yt-dlp>=2023.6.6
-youtubesearch-python>=1.6.0
-sclib>=2.0.0

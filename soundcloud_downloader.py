@@ -1,60 +1,80 @@
 """
 SoundCloud downloader — core function + legacy standalone GUI.
+Uses yt-dlp (SoundCloud is supported natively) so no extra dependency is needed.
 """
 import os
 import re
 import shutil
 import threading
-import requests
-from sclib import SoundcloudAPI, Track, Playlist
+import yt_dlp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SONG_LIBRARY = os.path.join(BASE_DIR, "music", "song_library")
 PLAYLISTS_DIR = os.path.join(BASE_DIR, "music", "playlists")
-
-_api = None
-
-
-def _get_api():
-    global _api
-    if _api is None:
-        _api = SoundcloudAPI()
-    return _api
 
 
 def _sanitize(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", name).strip(" .")
 
 
-def _download_track(track: "Track", save_dir: str, on_status=None) -> str | None:
-    """Download a single Track to save_dir. Returns folder name or None on failure."""
-    def emit(msg):
-        print(msg)
-        if on_status:
-            on_status(msg)
+def _ffmpeg_ready() -> bool:
+    """True when ffmpeg/ffprobe are present in the project folder (needed for MP3)."""
+    return (
+        os.path.exists(os.path.join(BASE_DIR, "ffmpeg.exe"))
+        and os.path.exists(os.path.join(BASE_DIR, "ffprobe.exe"))
+    )
 
-    artist = _sanitize(track.artist or "Unknown Artist")
-    title = _sanitize(track.title or "Unknown Title")
-    name = f"{artist} - {title}"
-    folder = os.path.join(save_dir, name)
+
+def _base_opts(quiet=True):
+    return {
+        "format": "bestaudio/best",
+        "noplaylist": True,
+        "quiet": quiet,
+        "no_warnings": True,
+        "ffmpeg_location": BASE_DIR,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }],
+        "keepvideo": False,
+        "writethumbnail": True,
+    }
+
+
+def _emit(msg, on_status):
+    print(msg)
+    if on_status:
+        on_status(msg)
+
+
+def _download_track(entry: dict, on_status=None) -> str | None:
+    """Download a single resolved track to music/song_library/{Artist - Title}/.
+    Returns the folder name, or None on failure."""
+    def emit(msg):
+        _emit(msg, on_status)
+
+    uploader = _sanitize(entry.get("uploader") or entry.get("artist") or "Unknown Artist")
+    title = _sanitize(entry.get("title") or "Unknown Title")
+    name = f"{uploader} - {title}"
+    folder = os.path.join(SONG_LIBRARY, name)
 
     if os.path.exists(folder):
         emit(f"Skipping '{name}' (already exists)")
         return name
 
+    url = entry.get("webpage_url") or entry.get("url")
+    if not url:
+        emit(f"Cannot download '{name}': no url.")
+        return None
+
+    os.makedirs(folder, exist_ok=True)
+    opts = _base_opts()
+    opts["outtmpl"] = os.path.join(folder, "audio.%(ext)s")
     try:
-        os.makedirs(folder, exist_ok=True)
         emit(f"Downloading '{name}'…")
-        with open(os.path.join(folder, f"{name}.mp3"), "wb") as fh:
-            track.write_mp3_to(fh)
-
-        if track.artwork_url:
-            emit("Fetching artwork…")
-            resp = requests.get(track.artwork_url, timeout=10)
-            resp.raise_for_status()
-            with open(os.path.join(folder, f"{name}.jpg"), "wb") as fh:
-                fh.write(resp.content)
-
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
         emit(f"Done: '{name}'")
         return name
     except Exception as e:
@@ -65,37 +85,36 @@ def _download_track(track: "Track", save_dir: str, on_status=None) -> str | None
 
 
 def download(url: str, on_status=None):
-    """
-    Download a SoundCloud track or playlist from *url*.
-    on_status: optional callable(str) for progress messages.
-    """
+    """Download a SoundCloud track or playlist from *url*."""
     def emit(msg):
-        print(msg)
-        if on_status:
-            on_status(msg)
+        _emit(msg, on_status)
 
     os.makedirs(SONG_LIBRARY, exist_ok=True)
     os.makedirs(PLAYLISTS_DIR, exist_ok=True)
 
-    if not url.startswith("https://"):
+    if not url.startswith("http"):
         url = "https://" + url
+
+    if not _ffmpeg_ready():
+        emit("ffmpeg.exe and ffprobe.exe are missing from the project folder. "
+             "Download them from ffmpeg.org and place them next to main.py (see README).")
+        return
 
     emit("Resolving URL…")
     try:
-        item = _get_api().resolve(url)
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": False}) as ydl:
+            info = ydl.extract_info(url, download=False)
     except Exception as e:
         emit(f"Could not resolve URL: {e}")
         return
 
-    if isinstance(item, Track):
-        _download_track(item, SONG_LIBRARY, on_status)
-
-    elif isinstance(item, Playlist):
-        pl_name = _sanitize(item.title)
-        emit(f"Downloading playlist '{item.title}' ({len(item.tracks)} tracks)…")
+    if info.get("_type") == "playlist" or "entries" in info:
+        entries = [e for e in info.get("entries", []) if e]
+        pl_name = _sanitize(info.get("title") or "Playlist")
+        emit(f"Downloading playlist '{pl_name}' ({len(entries)} tracks)…")
         downloaded = []
-        for track in item.tracks:
-            name = _download_track(track, SONG_LIBRARY, on_status)
+        for entry in entries:
+            name = _download_track(entry, on_status)
             if name:
                 downloaded.append(name)
 
@@ -104,7 +123,7 @@ def download(url: str, on_status=None):
             fh.write("\n".join(downloaded) + "\n")
         emit(f"Playlist saved: {pl_file}")
     else:
-        emit("URL did not resolve to a track or playlist.")
+        _download_track(info, on_status)
 
 
 # ─── Legacy standalone window ─────────────────────────────────────────────────
