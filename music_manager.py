@@ -1,4 +1,5 @@
 import os
+import shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -68,3 +69,33 @@ class MusicManager:
         path = os.path.join(self.playlists_path, f"{playlist_name}.txt")
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(f"{song_name}\n")
+
+    def delete_song(self, song_name: str) -> bool:
+        """Delete a song folder from the library. Returns True on success."""
+        folder = os.path.join(self.song_library_path, song_name)
+        if not os.path.isdir(folder):
+            return False
+        shutil.rmtree(folder, ignore_errors=True)
+        return not os.path.exists(folder)
+
+    def delete_playlist(self, playlist_name: str) -> bool:
+        """Delete a playlist file. Returns True on success."""
+        path = os.path.join(self.playlists_path, f"{playlist_name}.txt")
+        if not os.path.exists(path):
+            return False
+        os.remove(path)
+        return not os.path.exists(path)
+
+    def remove_from_playlist(self, playlist_name: str, song_name: str) -> bool:
+        """Remove a song from a playlist. Returns True if it was present."""
+        path = os.path.join(self.playlists_path, f"{playlist_name}.txt")
+        if not os.path.exists(path):
+            return False
+        with open(path, "r", encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh if ln.strip()]
+        if song_name not in lines:
+            return False
+        lines = [ln for ln in lines if ln != song_name]
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + ("\n" if lines else ""))
+        return True

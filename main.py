@@ -112,17 +112,16 @@ QPushButton#ctrl {
 }
 QPushButton#ctrl:hover { color: #ffffff; }
 QPushButton#ctrl-main {
-    background: #ffffff; color: #000000;
+    background: transparent; color: #a0a0a0;
     border: none; border-radius: 18px;
-    font-size: 16px; min-width: 36px; min-height: 36px; padding: 4px 10px;
+    font-size: 18px; min-width: 36px; min-height: 36px; padding: 4px 10px;
 }
-QPushButton#ctrl-main:hover { background: #dddddd; }
+QPushButton#ctrl-main:hover { color: #ffffff; background: #1a1a1a; }
 
 /* ── sliders ── */
-QSlider#prog::groove:horizontal {
-    background:#333; height:4px; border-radius:2px;
-    margin: 2px 0;
-}
+QSlider#prog, QSlider#vol { background: transparent; }
+QSlider#prog::groove:horizontal { background:#333; height:4px; border-radius:2px; }
+QSlider#prog::add-page:horizontal { background:#333; height:4px; border-radius:2px; }
 QSlider#prog::sub-page:horizontal { background:#1db954; height:4px; border-radius:2px; }
 QSlider#prog::handle:horizontal {
     background:#ffffff; width:10px; height:10px;
@@ -131,6 +130,7 @@ QSlider#prog::handle:horizontal {
 QSlider#prog:hover::handle:horizontal { background:#ffffff; }
 
 QSlider#vol::groove:horizontal { background:#333; height:3px; border-radius:2px; }
+QSlider#vol::add-page:horizontal { background:#333; height:3px; border-radius:2px; }
 QSlider#vol::sub-page:horizontal { background:#a0a0a0; height:3px; border-radius:2px; }
 QSlider#vol::sub-page:horizontal:hover { background:#1db954; }
 QSlider#vol::handle:horizontal {
@@ -195,6 +195,13 @@ QPushButton#row-play {
 }
 QPushButton#row-play:hover { background:#1ed760; }
 
+QPushButton#row-del {
+    background:transparent; color:#a0a0a0;
+    border:1px solid #333; border-radius:13px;
+    font-size:13px; font-weight:bold;
+}
+QPushButton#row-del:hover { background:#3a1a1a; color:#ff6b6b; border-color:#ff6b6b; }
+
 /* ── downloader ── */
 QTabWidget::pane { background:transparent; border:none; }
 QTabBar::tab { background:transparent; color:#a0a0a0; padding:10px 24px; border:none; font-size:13px; }
@@ -223,6 +230,132 @@ QScrollArea, QScrollArea > QWidget > QWidget { background:transparent; border:no
 
 
 # ─── Worker threads ───────────────────────────────────────────────────────────
+
+class ClickableSlider(QSlider):
+    """Slider that jumps to the clicked spot on the track.
+
+    Fusion + custom QSS keeps the handle draggable but drops the native
+    'click on the track to set the value' behavior, so we restore it here.
+    """
+
+    def mousePressEvent(self, e):
+        if (e.button() == Qt.MouseButton.LeftButton
+                and self.orientation() == Qt.Orientation.Horizontal):
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+            groove = self.style().subControlRect(
+                QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderGroove)
+            handle = self.style().subControlRect(
+                QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle)
+            if handle.isValid() and handle.contains(e.position().toPoint()):
+                super().mousePressEvent(e)
+                return
+            if groove.isValid() and groove.width() > 0:
+                x = int(e.position().x())
+                x = max(groove.left(), min(groove.right(), x))
+                value = QStyle.sliderValueFromPosition(
+                    self.minimum(), self.maximum(), x - groove.left(), groove.width())
+                self.setValue(value)
+                self.sliderReleased.emit()
+                return
+        super().mousePressEvent(e)
+
+
+class SeekSlider(QWidget):
+    """Custom-painted progress slider. No Fusion halo, precise click + drag."""
+
+    seekRequested = pyqtSignal(int)   # value (0..1000) committed on release
+    dragStarted = pyqtSignal()
+    dragEnded = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._value = 0
+        self._dragging = False
+        self.setFixedHeight(24)
+        self.setMinimumWidth(120)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    # -- value API ----------------------------------------------
+    def setValue(self, v):
+        v = max(0, min(1000, int(v)))
+        if not self._dragging:
+            self._value = v
+        self.update()
+
+    def value(self):
+        return self._value
+
+    # -- input ------------------------------------------------
+    def _frac_from(self, x) -> float:
+        pad = 10
+        w = self.width() - 2 * pad
+        if w <= 0:
+            return 0.0
+        return max(0.0, min(1.0, (x - pad) / w))
+
+    def _value_from(self, x) -> int:
+        return int(round(self._frac_from(x) * 1000))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            self._value = self._value_from(e.position().x())
+            self.dragStarted.emit()
+            self.update()
+        else:
+            super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if self._dragging:
+            self._value = self._value_from(e.position().x())
+            self.update()
+
+    def mouseReleaseEvent(self, e):
+        if self._dragging:
+            self._dragging = False
+            self._value = self._value_from(e.position().x())
+            self.dragEnded.emit()
+            self.seekRequested.emit(self._value)
+            self.update()
+            return
+        super().mouseReleaseEvent(e)
+
+    def leaveEvent(self, e):
+        self.update()
+        super().leaveEvent(e)
+
+    # -- paint ------------------------------------------------
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pad = 10
+        track_h = 5
+        y = (self.height() - track_h) // 2
+        w = self.width() - 2 * pad
+        frac = self._value / 1000.0
+        r = track_h / 2
+
+        track = QRectF(pad, y, w, track_h)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#333333"))
+        p.drawRoundedRect(track, r, r)
+
+        fill_w = max(1.0, w * frac)
+        fill = QRectF(pad, y, fill_w, track_h)
+        p.setBrush(QColor("#1db954"))
+        p.drawRoundedRect(fill, r, r)
+
+        cx = pad + w * frac
+        cy = self.height() / 2
+        hr = 5.5
+        # subtle dark ring so the handle reads on any fill color
+        p.setBrush(QColor("#878787"))
+        p.drawEllipse(QPointF(cx, cy), hr + 1.5, hr + 1.5)
+        p.setBrush(QColor("#ffffff"))
+        p.drawEllipse(QPointF(cx, cy), hr, hr)
+        p.end()
+
 
 class _DurThread(QThread):
     result = pyqtSignal(float)
@@ -345,11 +478,10 @@ class NowPlayingBar(QWidget):
         self.total_lbl = QLabel("0:00")
         self.total_lbl.setObjectName("np-time")
 
-        self.prog_slider = QSlider(Qt.Orientation.Horizontal)
-        self.prog_slider.setObjectName("prog")
-        self.prog_slider.setRange(0, 1000)
-        self.prog_slider.sliderPressed.connect(lambda: setattr(self, "_dragging", True))
-        self.prog_slider.sliderReleased.connect(self._on_seek)
+        self.prog_slider = SeekSlider()
+        self.prog_slider.dragStarted.connect(lambda: setattr(self, "_dragging", True))
+        self.prog_slider.dragEnded.connect(lambda: setattr(self, "_dragging", False))
+        self.prog_slider.seekRequested.connect(self._on_seek)
 
         prog_row.addWidget(self.elapsed_lbl)
         prog_row.addWidget(self.prog_slider, 1)
@@ -364,7 +496,7 @@ class NowPlayingBar(QWidget):
         right.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         vol_icon = QLabel("🔊")
         vol_icon.setStyleSheet("color: #a0a0a0; font-size: 14px;")
-        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider = ClickableSlider(Qt.Orientation.Horizontal)
         self.vol_slider.setObjectName("vol")
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setValue(80)
@@ -490,12 +622,14 @@ class Sidebar(QWidget):
 
 class SongRow(QWidget):
     play_clicked = pyqtSignal(int)  # emits queue index
+    delete_requested = pyqtSignal(str)  # emits song (folder) name
 
     def __init__(self, index: int, name: str, image_path: str, is_playing: bool = False):
         super().__init__()
         self.setObjectName("song-row")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.index = index
+        self._name = name
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 6, 10, 6)
@@ -512,6 +646,8 @@ class SongRow(QWidget):
             if is_playing else "color: #ffffff; font-size: 13px;"
         )
         title.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        title.setMinimumWidth(200)
         layout.addWidget(title, 1)
 
         btn = QPushButton("▶  Play")
@@ -519,6 +655,13 @@ class SongRow(QWidget):
         btn.setFixedWidth(72)
         btn.clicked.connect(lambda: self.play_clicked.emit(self.index))
         layout.addWidget(btn)
+
+        del_btn = QPushButton("⌫")
+        del_btn.setObjectName("row-del")
+        del_btn.setFixedSize(30, 30)
+        del_btn.setToolTip("Delete")
+        del_btn.clicked.connect(lambda: self.delete_requested.emit(self._name))
+        layout.addWidget(del_btn)
 
     def mousePressEvent(self, event):
         self.play_clicked.emit(self.index)
@@ -553,6 +696,7 @@ class LibraryPage(QWidget):
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._content = QWidget()
         self._vbox = QVBoxLayout(self._content)
         self._vbox.setContentsMargins(0, 0, 0, 0)
@@ -590,7 +734,18 @@ class LibraryPage(QWidget):
             row = SongRow(i, name, data.get("image_path", NO_IMG),
                           is_playing=(i == self._current_index))
             row.play_clicked.connect(lambda idx, s=songs: self.play_requested.emit(s, idx))
+            row.delete_requested.connect(self._delete_song)
             self._vbox.insertWidget(self._vbox.count() - 1, row)
+
+    def _delete_song(self, name: str):
+        resp = QMessageBox.question(
+            self, "Delete Song",
+            f"Delete '{name}' from the library?\nThis removes its folder on disk.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if resp == QMessageBox.StandardButton.Yes:
+            self._manager.delete_song(name)
+            self.load_songs()
 
     def set_playing_index(self, index: int):
         self._current_index = index
@@ -600,6 +755,7 @@ class LibraryPage(QWidget):
 
 class PlaylistCard(QWidget):
     clicked = pyqtSignal(str)
+    delete_requested = pyqtSignal(str)
 
     def __init__(self, name: str, song_count: int, art_path: str):
         super().__init__()
@@ -627,6 +783,18 @@ class PlaylistCard(QWidget):
         cnt = QLabel(f"{song_count} songs")
         cnt.setObjectName("pl-count")
         layout.addWidget(cnt)
+
+        self._del_btn = QPushButton("⌫")
+        self._del_btn.setObjectName("row-del")
+        self._del_btn.setFixedSize(26, 26)
+        self._del_btn.setToolTip("Delete playlist")
+        self._del_btn.setParent(self)
+        self._del_btn.raise_()
+        self._del_btn.clicked.connect(lambda: self.delete_requested.emit(self._name))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._del_btn.move(self.width() - self._del_btn.width() - 8, 8)
 
     def mousePressEvent(self, event):
         self.clicked.emit(self._name)
@@ -683,7 +851,18 @@ class PlaylistsPage(QWidget):
             art = songs[0][1].get("image_path", NO_IMG) if songs else NO_IMG
             card = PlaylistCard(name, len(songs), art)
             card.clicked.connect(self.open_playlist)
+            card.delete_requested.connect(self._delete_playlist)
             self._grid.addWidget(card, i // col_max, i % col_max)
+
+    def _delete_playlist(self, name: str):
+        resp = QMessageBox.question(
+            self, "Delete Playlist",
+            f"Delete playlist '{name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if resp == QMessageBox.StandardButton.Yes:
+            self._manager.delete_playlist(name)
+            self.load_playlists()
 
     def _create_playlist(self):
         name, ok = QInputDialog.getText(self, "New Playlist", "Playlist name:")
@@ -704,6 +883,7 @@ class PlaylistSongsPage(QWidget):
         super().__init__()
         self._manager = manager
         self._songs: list[tuple] = []
+        self._playlist_name = ""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -715,7 +895,11 @@ class PlaylistSongsPage(QWidget):
         back_btn = QPushButton("← Playlists")
         back_btn.setObjectName("back-btn")
         back_btn.clicked.connect(self.back_clicked)
+        self._del_pl_btn = QPushButton("🗑  Delete Playlist")
+        self._del_pl_btn.setObjectName("ghost-btn")
+        self._del_pl_btn.clicked.connect(self._delete_playlist)
         header.addWidget(back_btn)
+        header.addWidget(self._del_pl_btn)
         header.addStretch()
         self._title_lbl = QLabel("Playlist")
         self._title_lbl.setObjectName("page-title")
@@ -725,6 +909,7 @@ class PlaylistSongsPage(QWidget):
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._content = QWidget()
         self._vbox = QVBoxLayout(self._content)
         self._vbox.setContentsMargins(0, 0, 0, 0)
@@ -734,6 +919,7 @@ class PlaylistSongsPage(QWidget):
         layout.addWidget(self._scroll, 1)
 
     def load(self, playlist_name: str):
+        self._playlist_name = playlist_name
         self._title_lbl.setText(playlist_name)
         self._songs = self._manager.get_playlist_songs(playlist_name)
 
@@ -745,7 +931,28 @@ class PlaylistSongsPage(QWidget):
         for i, (name, data) in enumerate(self._songs):
             row = SongRow(i, name, data.get("image_path", NO_IMG))
             row.play_clicked.connect(lambda idx: self.play_requested.emit(self._songs, idx))
+            row.delete_requested.connect(self._remove_song_from_playlist)
             self._vbox.insertWidget(self._vbox.count() - 1, row)
+
+    def _remove_song_from_playlist(self, name: str):
+        resp = QMessageBox.question(
+            self, "Remove from Playlist",
+            f"Remove '{name}' from '{self._playlist_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if resp == QMessageBox.StandardButton.Yes:
+            self._manager.remove_from_playlist(self._playlist_name, name)
+            self.load(self._playlist_name)
+
+    def _delete_playlist(self):
+        resp = QMessageBox.question(
+            self, "Delete Playlist",
+            f"Delete playlist '{self._playlist_name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if resp == QMessageBox.StandardButton.Yes:
+            self._manager.delete_playlist(self._playlist_name)
+            self.back_clicked.emit()
 
 
 # ─── Downloader Page ──────────────────────────────────────────────────────────
